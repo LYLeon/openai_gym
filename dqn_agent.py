@@ -2,6 +2,7 @@ import tensorflow as tf
 from collections import deque
 import random
 import numpy as np
+from gym.spaces import Box
 class DQNAgent:
 
 	def __construct_nn(self, observation_dimen):
@@ -9,8 +10,9 @@ class DQNAgent:
 		observation_dimen += 1 # +1 for action input
 		self.observation_action_input = tf.placeholder(tf.float32, shape=(None, observation_dimen), name="input")
 		self.real_reward = tf.placeholder(tf.float32,shape=(None, 1)) # or ([None, 1]) but why?
-		hidden_1_size = 10
-		hidden_2_size = 10
+
+		hidden_1_size = 5
+		hidden_2_size = 5
 		
 		w1 = tf.Variable(tf.truncated_normal([observation_dimen, hidden_1_size], name="w1"))
 		b1 = tf.Variable(tf.zeros([hidden_1_size]), name="b1")
@@ -26,8 +28,8 @@ class DQNAgent:
 			tf.summary.scalar('real_reward', tf.reduce_mean(self.real_reward))
 			tf.summary.scalar('reward_prediction', tf.reduce_mean(self.reward_prediction))
 
-		self.optimizer = tf.train.GradientDescentOptimizer(0.003).minimize(cost)
-		self.cost_summary = tf.merge_all_summaries()
+		self.optimizer = tf.train.GradientDescentOptimizer(0.00025).minimize(cost)
+		self.summary = tf.merge_all_summaries()
 		self.init = tf.initialize_all_variables()
 		self.sess = tf.InteractiveSession()
 		self.train_summary_writer = tf.train.SummaryWriter('summary/train', self.sess.graph)
@@ -65,40 +67,45 @@ class DQNAgent:
 		return [self.__combine_action_observation(x[0], x[1]) for x in replay]
 
 	def __batch_reward(self, replay):
-		return [[x[3] + self.REWARD_DISCOUNT*np.max(self.__compute_all_possible_reward(x[2]))] for x in replay]
+		return [[x[3] + self.REWARD_DISCOUNT*np.max(self.__compute_all_possible_reward(x[2])) if x[2]!=None else x[3]] for x in replay]
 
 	def __train_on_replays(self):
 		sample_indices = random.sample(xrange(len(self.replay)), int(self.batch_size))
-		random_sample = [self.replay[i] for i in sample_indices]
-		replay_batch = self.__get_batch(random_sample, self.batch_size, 0)
+		replay_batch = [self.replay[i] for i in sample_indices]
 		observation_action = self.__batch_observation_action(replay_batch)
 		reward = self.__batch_reward(replay_batch)
-		summary, _ = self.sess.run([self.cost_summary, self.optimizer], feed_dict={self.observation_action_input : observation_action, self.real_reward : reward})
+		summary, _ = self.sess.run([self.summary, self.optimizer], feed_dict={self.observation_action_input : observation_action, self.real_reward : reward})
 		self.train_summary_writer.add_summary(summary, self.total_trained_step)
 		self.total_trained_step += 1
 		if self.total_trained_step % 500 == 0:
 			if self.EPSILON > self.MIN_EPISON:
 				self.EPSILON *= self.EPSILON_DECAY
-			# self.train_summary_writer.flush()
+			self.train_summary_writer.flush()
 			print('step ', self.total_trained_step, 'epsilon', self.EPSILON)
 			
 			
-	def observe(self, observation_before_action, action_taken, new_observation, reward):
+	def observe(self, observation_before_action, action_taken, new_observation, reward, reward_sum):
 		self.replay.appendleft((observation_before_action, action_taken, new_observation, reward))
-		self.steps_since_last_train += 1
-		if len(self.replay) == self.REPLAY_SIZE and self.steps_since_last_train >= self.TRAIN_INTERVAL:
+		self.action_record[action_taken] += 1
+		if len(self.replay) >= self.batch_size:
 			self.__train_on_replays()
-			self.steps_since_last_train = 0
 
 	def controlled_random_action_ratio(self):
 		return float(self.controled_action_num)/float(self.controled_action_num + self.random_action_num)
 
+	def proportion_action_taken(self):
+		num_of_actions = float(np.sum(self.action_record))
+		return [float(self.action_record[i])/num_of_actions for i in range(len(self.action_record))]
+
 	def episode_end(self):
 		self.controled_action_num = 0
 		self.random_action_num = 0
+		for i in range(len(self.action_record)):
+			self.action_record[i] = 0
+
 
 	def __init__(self, observation_space, action_space):
-		self.REPLAY_SIZE = 3000
+		self.REPLAY_SIZE = 300
 		self.OBSERVATION_SPACE = observation_space
 		self.ACTION_SPACE = action_space
 		self.batch_size = 30
@@ -107,6 +114,7 @@ class DQNAgent:
 		self.MIN_EPISON = 0.05
 		self.REWARD_DISCOUNT = 0.99
 		self.TRAIN_INTERVAL = self.batch_size/5
+		self.action_record = [0]*action_space.n
 		self.steps_since_last_train = 0
 		self.random_action_num = 0
 		self.controled_action_num = 0
