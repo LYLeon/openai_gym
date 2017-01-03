@@ -3,13 +3,13 @@ from collections import deque
 import random
 import numpy as np
 from gym.spaces import Box
+
 class DQNAgent:
 
 	def __construct_nn(self, observation_dimen):
-		print('start constructing nn')
 		observation_dimen += 1 # +1 for action input
 		self.observation_action_input = tf.placeholder(tf.float32, shape=(None, observation_dimen), name="input")
-		self.real_reward = tf.placeholder(tf.float32,shape=(None, 1)) # or ([None, 1]) but why?
+		self.real_reward = tf.placeholder(tf.float32,shape=(None, 1))
 
 		hidden_1_size = 5
 		hidden_2_size = 5
@@ -36,7 +36,6 @@ class DQNAgent:
 		self.sess.run(self.init)
 		self.total_trained_step = 0		
 
-		print('finish constructing nn')
 
 	def __combine_action_observation(self, observation, action):
 		return np.append(observation, action)
@@ -84,7 +83,7 @@ class DQNAgent:
 			print('step ', self.total_trained_step, 'epsilon', self.EPSILON)
 			
 			
-	def observe(self, observation_before_action, action_taken, new_observation, reward, reward_sum):
+	def observe(self, observation_before_action, action_taken, new_observation, reward):
 		self.replay.appendleft((observation_before_action, action_taken, new_observation, reward))
 		self.action_record[action_taken] += 1
 		if len(self.replay) >= self.batch_size:
@@ -105,12 +104,12 @@ class DQNAgent:
 
 
 	def __init__(self, observation_space, action_space):
-		self.REPLAY_SIZE = 300
+		self.REPLAY_SIZE = 600
 		self.OBSERVATION_SPACE = observation_space
 		self.ACTION_SPACE = action_space
 		self.batch_size = 30
 		self.EPSILON = 1
-		self.EPSILON_DECAY = 0.99
+		self.EPSILON_DECAY = 0.991
 		self.MIN_EPISON = 0.05
 		self.REWARD_DISCOUNT = 0.99
 		self.TRAIN_INTERVAL = self.batch_size/5

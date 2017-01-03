@@ -1,7 +1,9 @@
 import gym
 from dqn_agent import DQNAgent
+from gym import wrappers
 
 env = gym.make('CartPole-v0')
+env = wrappers.Monitor(env, '/tmp/cartpole-experiment-1', force=True)
 agent = DQNAgent(env.observation_space, env.action_space)
 
 for i_episode in range(1000000):
@@ -14,10 +16,10 @@ for i_episode in range(1000000):
         # print(observation)
         action = agent.get_action_for(observation)
         new_observation, reward, done, info = env.step(action)
-        agent.observe(observation, action, None if done else new_observation, reward, reward_sum)
+        agent.observe(observation, action, None if done else new_observation, reward)
         observation = new_observation
         reward_sum += reward
         if done or t == 499:
-            print('total reward this turn: %d' % reward_sum, ' action controlled: %0.2f ' % agent.controlled_random_action_ratio(), 'action proportion', agent.proportion_action_taken())
+            # print('total reward this turn: %d' % reward_sum, ' action controlled: %0.2f ' % agent.controlled_random_action_ratio(), 'action proportion', agent.proportion_action_taken())
             agent.episode_end()
             break
